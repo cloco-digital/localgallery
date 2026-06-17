@@ -161,10 +161,6 @@ function closeFullscreen() {
   if (document.fullscreenElement) {
     document.exitFullscreen()
   }
-  // Clear stale transform so the next open starts clean
-  overlayImg.style.transform = ''
-  overlayImg.style.maxWidth = ''
-  overlayImg.style.maxHeight = ''
 }
 
 function prevImage() {
@@ -182,13 +178,6 @@ function nextImage() {
 function updateOverlayImage() {
   const file = images[currentIndex]
   const url = URL.createObjectURL(file)
-
-  // Reset transform immediately so the old image doesn't flash
-  // with the previous rotation while the new one loads.
-  overlayImg.style.transform = ''
-  overlayImg.style.maxWidth = ''
-  overlayImg.style.maxHeight = ''
-
   overlayImg.onload = () => {
     const isTallImg = isTall(overlayImg.naturalWidth, overlayImg.naturalHeight)
     applyOverlayRotation(file, isTallImg)
