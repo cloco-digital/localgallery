@@ -1,60 +1,101 @@
 import './style.css'
-import typescriptLogo from './assets/typescript.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import { setupCounter } from './counter.ts'
 
-document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
-<section id="center">
-  <div class="hero">
-    <img src="${heroImg}" class="base" width="170" height="179">
-    <img src="${typescriptLogo}" class="framework" alt="TypeScript logo"/>
-    <img src="${viteLogo}" class="vite" alt="Vite logo" />
-  </div>
-  <div>
-    <h1>Get started</h1>
-    <p>Edit <code>src/main.ts</code> and save to test <code>HMR</code></p>
-  </div>
-  <button id="counter" type="button" class="counter"></button>
-</section>
+const folderInput = document.getElementById('folder-input') as HTMLInputElement
+const gallery = document.getElementById('gallery') as HTMLDivElement
+const overlay = document.getElementById('overlay') as HTMLDivElement
+const overlayImg = document.getElementById('overlay-img') as HTMLImageElement
 
-<div class="ticks"></div>
+let images: File[] = []
+let currentIndex = 0
 
-<section id="next-steps">
-  <div id="docs">
-    <svg class="icon" role="presentation" aria-hidden="true"><use href="/icons.svg#documentation-icon"></use></svg>
-    <h2>Documentation</h2>
-    <p>Your questions, answered</p>
-    <ul>
-      <li>
-        <a href="https://vite.dev/" target="_blank">
-          <img class="logo" src="${viteLogo}" alt="" />
-          Explore Vite
-        </a>
-      </li>
-      <li>
-        <a href="https://www.typescriptlang.org" target="_blank">
-          <img class="button-icon" src="${typescriptLogo}" alt="">
-          Learn more
-        </a>
-      </li>
-    </ul>
-  </div>
-  <div id="social">
-    <svg class="icon" role="presentation" aria-hidden="true"><use href="/icons.svg#social-icon"></use></svg>
-    <h2>Connect with us</h2>
-    <p>Join the Vite community</p>
-    <ul>
-      <li><a href="https://github.com/vitejs/vite" target="_blank"><svg class="button-icon" role="presentation" aria-hidden="true"><use href="/icons.svg#github-icon"></use></svg>GitHub</a></li>
-      <li><a href="https://chat.vite.dev/" target="_blank"><svg class="button-icon" role="presentation" aria-hidden="true"><use href="/icons.svg#discord-icon"></use></svg>Discord</a></li>
-      <li><a href="https://x.com/vite_js" target="_blank"><svg class="button-icon" role="presentation" aria-hidden="true"><use href="/icons.svg#x-icon"></use></svg>X.com</a></li>
-      <li><a href="https://bsky.app/profile/vite.dev" target="_blank"><svg class="button-icon" role="presentation" aria-hidden="true"><use href="/icons.svg#bluesky-icon"></use></svg>Bluesky</a></li>
-    </ul>
-  </div>
-</section>
+const IMAGE_TYPES = new Set([
+  'image/apng',
+  'image/avif',
+  'image/gif',
+  'image/jpeg',
+  'image/png',
+  'image/svg+xml',
+  'image/webp',
+  'image/bmp',
+  'image/tiff',
+  'image/heic',
+])
 
-<div class="ticks"></div>
-<section id="spacer"></section>
-`
+function isImage(file: File): boolean {
+  if (IMAGE_TYPES.has(file.type)) return true
+  const ext = file.name.split('.').pop()?.toLowerCase()
+  return ext === 'jpg' || ext === 'jpeg' || ext === 'png' || ext === 'gif' ||
+         ext === 'webp' || ext === 'svg' || ext === 'bmp' || ext === 'avif' ||
+         ext === 'heic' || ext === 'tiff' || ext === 'tif'
+}
 
-setupCounter(document.querySelector<HTMLButtonElement>('#counter')!)
+function sortByMtime(files: File[]): File[] {
+  return [...files].sort((a, b) => (a.lastModified || 0) - (b.lastModified || 0))
+}
+
+function renderGallery() {
+  gallery.innerHTML = ''
+  for (let i = 0; i < images.length; i++) {
+    const file = images[i]
+    const url = URL.createObjectURL(file)
+
+    const wrapper = document.createElement('div')
+    wrapper.className = 'thumb'
+    wrapper.dataset.index = String(i)
+
+    const img = document.createElement('img')
+    img.src = url
+    img.alt = file.name
+    img.loading = 'lazy'
+
+    wrapper.appendChild(img)
+    wrapper.addEventListener('click', () => openFullscreen(i))
+    gallery.appendChild(wrapper)
+  }
+}
+
+function openFullscreen(index: number) {
+  if (images.length === 0) return
+  currentIndex = index
+  updateOverlayImage()
+  overlay.classList.remove('hidden')
+}
+
+function closeFullscreen() {
+  overlay.classList.add('hidden')
+}
+
+function prevImage() {
+  if (images.length === 0) return
+  currentIndex = (currentIndex - 1 + images.length) % images.length
+  updateOverlayImage()
+}
+
+function nextImage() {
+  if (images.length === 0) return
+  currentIndex = (currentIndex + 1) % images.length
+  updateOverlayImage()
+}
+
+function updateOverlayImage() {
+  const file = images[currentIndex]
+  const url = URL.createObjectURL(file)
+  overlayImg.src = url
+}
+
+folderInput.addEventListener('change', () => {
+  const files = Array.from(folderInput.files || [])
+  images = sortByMtime(files.filter(isImage))
+  renderGallery()
+})
+
+overlay.addEventListener('click', (e) => {
+  if (e.target === overlay) closeFullscreen()
+})
+
+document.addEventListener('keydown', (e) => {
+  if (overlay.classList.contains('hidden')) return
+  if (e.key === 'Escape') closeFullscreen()
+  if (e.key === 'ArrowLeft') prevImage()
+  if (e.key === 'ArrowRight') nextImage()
+})
