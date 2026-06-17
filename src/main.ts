@@ -10,6 +10,7 @@ let currentIndex = 0
 let tallMode = false
 
 const STORAGE_KEY = 'localgallery_rotations'
+const imageDimensions = new Map<string, { width: number; height: number }>()
 
 const IMAGE_TYPES = new Set([
   'image/apng',
@@ -38,6 +39,14 @@ function sortByMtime(files: File[]): File[] {
 
 function getFileHash(file: File): string {
   return `${file.name}|${file.size}|${file.lastModified}`
+}
+
+function cacheDimension(hash: string, width: number, height: number) {
+  imageDimensions.set(hash, { width, height })
+}
+
+function getDimension(hash: string): { width: number; height: number } | undefined {
+  return imageDimensions.get(hash)
 }
 
 function getRotations(): Record<string, number> {
@@ -72,9 +81,9 @@ function applyThumbnailRotation(img: HTMLImageElement, file: File, isTallImg: bo
   img.style.setProperty('--rotation', `${total}deg`)
 }
 
-function applyOverlayRotation(file: File, isTallImg: boolean) {
+function applyOverlayRotation(file: File, width: number, height: number) {
   const stored = getRotation(file)
-  const total = getDisplayRotation(stored, isTallImg)
+  const total = getDisplayRotation(stored, isTall(width, height))
   overlayImg.style.transform = `rotate(${total}deg)`
   if (total === 90 || total === 270) {
     overlayImg.style.maxWidth = '100vh'
@@ -93,13 +102,16 @@ function rotateCurrentImage() {
   const newDeg = (currentDeg + 90) % 360
   setRotation(hash, newDeg)
 
-  const isTallImg = isTall(overlayImg.naturalWidth, overlayImg.naturalHeight)
-  applyOverlayRotation(file, isTallImg)
+  const dim = getDimension(hash)
+  if (dim) {
+    applyOverlayRotation(file, dim.width, dim.height)
+  } else {
+    applyOverlayRotation(file, overlayImg.naturalWidth, overlayImg.naturalHeight)
+  }
 
   const thumb = gallery.querySelector(`.thumb[data-index="${currentIndex}"] img`) as HTMLImageElement | null
   if (thumb) {
-    const isThumbTall = isTall(thumb.naturalWidth, thumb.naturalHeight)
-    applyThumbnailRotation(thumb, file, isThumbTall)
+    applyThumbnailRotation(thumb, file, isTall(thumb.naturalWidth, thumb.naturalHeight))
   }
 }
 
@@ -108,8 +120,13 @@ function toggleTallMode() {
   renderGallery()
   if (!overlay.classList.contains('hidden')) {
     const file = images[currentIndex]
-    const isTallImg = isTall(overlayImg.naturalWidth, overlayImg.naturalHeight)
-    applyOverlayRotation(file, isTallImg)
+    const hash = getFileHash(file)
+    const dim = getDimension(hash)
+    if (dim) {
+      applyOverlayRotation(file, dim.width, dim.height)
+    } else {
+      applyOverlayRotation(file, overlayImg.naturalWidth, overlayImg.naturalHeight)
+    }
   }
 }
 
@@ -121,11 +138,25 @@ function toggleBrowserFullscreen() {
   }
 }
 
+function preloadDimensions(index: number) {
+  const wrapped = (index + images.length) % images.length
+  const file = images[wrapped]
+  const hash = getFileHash(file)
+  if (imageDimensions.has(hash)) return
+
+  const img = new Image()
+  img.onload = () => {
+    cacheDimension(hash, img.naturalWidth, img.naturalHeight)
+  }
+  img.src = URL.createObjectURL(file)
+}
+
 function renderGallery() {
   gallery.innerHTML = ''
   for (let i = 0; i < images.length; i++) {
     const file = images[i]
     const url = URL.createObjectURL(file)
+    const hash = getFileHash(file)
 
     const wrapper = document.createElement('div')
     wrapper.className = 'thumb'
@@ -139,6 +170,7 @@ function renderGallery() {
     applyThumbnailRotation(img, file, false)
 
     img.onload = () => {
+      cacheDimension(hash, img.naturalWidth, img.naturalHeight)
       const isTallImg = isTall(img.naturalWidth, img.naturalHeight)
       applyThumbnailRotation(img, file, isTallImg)
     }
@@ -154,6 +186,8 @@ function openFullscreen(index: number) {
   currentIndex = index
   updateOverlayImage()
   overlay.classList.remove('hidden')
+  preloadDimensions(currentIndex - 1)
+  preloadDimensions(currentIndex + 1)
 }
 
 function closeFullscreen() {
@@ -167,21 +201,36 @@ function prevImage() {
   if (images.length === 0) return
   currentIndex = (currentIndex - 1 + images.length) % images.length
   updateOverlayImage()
+  preloadDimensions(currentIndex - 1)
 }
 
 function nextImage() {
   if (images.length === 0) return
   currentIndex = (currentIndex + 1) % images.length
   updateOverlayImage()
+  preloadDimensions(currentIndex + 1)
 }
 
 function updateOverlayImage() {
   const file = images[currentIndex]
+  const hash = getFileHash(file)
   const url = URL.createObjectURL(file)
-  overlayImg.onload = () => {
-    const isTallImg = isTall(overlayImg.naturalWidth, overlayImg.naturalHeight)
-    applyOverlayRotation(file, isTallImg)
+  const cached = getDimension(hash)
+
+  // Clear stale onload so a previous image's handler doesn't fire on this one
+  overlayImg.onload = null
+
+  if (cached) {
+    // We already know dimensions — apply rotation BEFORE src changes so the
+    // incoming image never briefly inherits the previous image's transform.
+    applyOverlayRotation(file, cached.width, cached.height)
+  } else {
+    overlayImg.onload = () => {
+      cacheDimension(hash, overlayImg.naturalWidth, overlayImg.naturalHeight)
+      applyOverlayRotation(file, overlayImg.naturalWidth, overlayImg.naturalHeight)
+    }
   }
+
   overlayImg.src = url
 }
 
