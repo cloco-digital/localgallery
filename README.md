@@ -10,7 +10,10 @@ A dead-simple, fast photo gallery that runs entirely in your browser. No uploads
 - **Select any folder** on your machine with the file picker (including subfolders)
 - **Lazy-loaded grid** of thumbnails — fast even with hundreds of photos
 - **Click to view fullscreen** with a clean overlay
-- **Keyboard navigation**: `← →` to move between images, `Esc` to close
+- **Keyboard navigation**:
+  - `← →` to move between images
+  - `Esc` to close fullscreen
+  - `R` to rotate the current image 90° (persists per-photo via localStorage)
 - **Auto-sorts by last modified** so your newest shots appear first
 - **Supports**: JPG, PNG, GIF, WebP, SVG, AVIF, HEIC, BMP, TIFF, and more
 

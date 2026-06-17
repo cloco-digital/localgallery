@@ -8,6 +8,8 @@ const overlayImg = document.getElementById('overlay-img') as HTMLImageElement
 let images: File[] = []
 let currentIndex = 0
 
+const STORAGE_KEY = 'localgallery_rotations'
+
 const IMAGE_TYPES = new Set([
   'image/apng',
   'image/avif',
@@ -33,6 +35,62 @@ function sortByMtime(files: File[]): File[] {
   return [...files].sort((a, b) => (a.lastModified || 0) - (b.lastModified || 0))
 }
 
+function getFileHash(file: File): string {
+  return `${file.name}|${file.size}|${file.lastModified}`
+}
+
+function getRotations(): Record<string, number> {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}')
+  } catch {
+    return {}
+  }
+}
+
+function setRotation(hash: string, deg: number) {
+  const rotations = getRotations()
+  rotations[hash] = deg
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(rotations))
+}
+
+function getRotation(file: File): number {
+  return getRotations()[getFileHash(file)] || 0
+}
+
+function applyThumbnailRotation(img: HTMLImageElement, file: File) {
+  const deg = getRotation(file)
+  img.style.setProperty('--rotation', `${deg}deg`)
+}
+
+function applyOverlayRotation(file: File) {
+  const deg = getRotation(file)
+  overlayImg.style.transform = `rotate(${deg}deg)`
+  if (deg === 90 || deg === 270) {
+    overlayImg.style.maxWidth = '100vh'
+    overlayImg.style.maxHeight = '100vw'
+  } else {
+    overlayImg.style.maxWidth = ''
+    overlayImg.style.maxHeight = ''
+  }
+}
+
+function rotateCurrentImage() {
+  if (images.length === 0) return
+  const file = images[currentIndex]
+  const hash = getFileHash(file)
+  const currentDeg = getRotation(file)
+  const newDeg = (currentDeg + 90) % 360
+  setRotation(hash, newDeg)
+
+  applyOverlayRotation(file)
+
+  // Update the thumbnail too
+  const thumb = gallery.querySelector(`.thumb[data-index="${currentIndex}"] img`) as HTMLImageElement | null
+  if (thumb) {
+    applyThumbnailRotation(thumb, file)
+  }
+}
+
 function renderGallery() {
   gallery.innerHTML = ''
   for (let i = 0; i < images.length; i++) {
@@ -47,6 +105,7 @@ function renderGallery() {
     img.src = url
     img.alt = file.name
     img.loading = 'lazy'
+    applyThumbnailRotation(img, file)
 
     wrapper.appendChild(img)
     wrapper.addEventListener('click', () => openFullscreen(i))
@@ -81,6 +140,7 @@ function updateOverlayImage() {
   const file = images[currentIndex]
   const url = URL.createObjectURL(file)
   overlayImg.src = url
+  applyOverlayRotation(file)
 }
 
 folderInput.addEventListener('change', () => {
@@ -98,4 +158,8 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') closeFullscreen()
   if (e.key === 'ArrowLeft') prevImage()
   if (e.key === 'ArrowRight') nextImage()
+  if (e.key === 'r' || e.key === 'R') {
+    e.preventDefault()
+    rotateCurrentImage()
+  }
 })
