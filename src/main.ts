@@ -7,6 +7,7 @@ const overlayImg = document.getElementById('overlay-img') as HTMLImageElement
 
 let images: File[] = []
 let currentIndex = 0
+let tallMode = false
 
 const STORAGE_KEY = 'localgallery_rotations'
 
@@ -57,15 +58,25 @@ function getRotation(file: File): number {
   return getRotations()[getFileHash(file)] || 0
 }
 
-function applyThumbnailRotation(img: HTMLImageElement, file: File) {
-  const deg = getRotation(file)
-  img.style.setProperty('--rotation', `${deg}deg`)
+function isTall(width: number, height: number): boolean {
+  return height > width
 }
 
-function applyOverlayRotation(file: File) {
-  const deg = getRotation(file)
-  overlayImg.style.transform = `rotate(${deg}deg)`
-  if (deg === 90 || deg === 270) {
+function getDisplayRotation(storedDeg: number, isTallImage: boolean): number {
+  return storedDeg + (tallMode && isTallImage ? 90 : 0)
+}
+
+function applyThumbnailRotation(img: HTMLImageElement, file: File, isTallImg: boolean) {
+  const stored = getRotation(file)
+  const total = getDisplayRotation(stored, isTallImg)
+  img.style.setProperty('--rotation', `${total}deg`)
+}
+
+function applyOverlayRotation(file: File, isTallImg: boolean) {
+  const stored = getRotation(file)
+  const total = getDisplayRotation(stored, isTallImg)
+  overlayImg.style.transform = `rotate(${total}deg)`
+  if (total === 90 || total === 270) {
     overlayImg.style.maxWidth = '100vh'
     overlayImg.style.maxHeight = '100vw'
   } else {
@@ -82,12 +93,31 @@ function rotateCurrentImage() {
   const newDeg = (currentDeg + 90) % 360
   setRotation(hash, newDeg)
 
-  applyOverlayRotation(file)
+  const isTallImg = isTall(overlayImg.naturalWidth, overlayImg.naturalHeight)
+  applyOverlayRotation(file, isTallImg)
 
-  // Update the thumbnail too
   const thumb = gallery.querySelector(`.thumb[data-index="${currentIndex}"] img`) as HTMLImageElement | null
   if (thumb) {
-    applyThumbnailRotation(thumb, file)
+    const isThumbTall = isTall(thumb.naturalWidth, thumb.naturalHeight)
+    applyThumbnailRotation(thumb, file, isThumbTall)
+  }
+}
+
+function toggleTallMode() {
+  tallMode = !tallMode
+  renderGallery()
+  if (!overlay.classList.contains('hidden')) {
+    const file = images[currentIndex]
+    const isTallImg = isTall(overlayImg.naturalWidth, overlayImg.naturalHeight)
+    applyOverlayRotation(file, isTallImg)
+  }
+}
+
+function toggleBrowserFullscreen() {
+  if (document.fullscreenElement) {
+    document.exitFullscreen()
+  } else {
+    overlay.requestFullscreen()
   }
 }
 
@@ -105,7 +135,13 @@ function renderGallery() {
     img.src = url
     img.alt = file.name
     img.loading = 'lazy'
-    applyThumbnailRotation(img, file)
+
+    applyThumbnailRotation(img, file, false)
+
+    img.onload = () => {
+      const isTallImg = isTall(img.naturalWidth, img.naturalHeight)
+      applyThumbnailRotation(img, file, isTallImg)
+    }
 
     wrapper.appendChild(img)
     wrapper.addEventListener('click', () => openFullscreen(i))
@@ -122,6 +158,9 @@ function openFullscreen(index: number) {
 
 function closeFullscreen() {
   overlay.classList.add('hidden')
+  if (document.fullscreenElement) {
+    document.exitFullscreen()
+  }
 }
 
 function prevImage() {
@@ -139,8 +178,11 @@ function nextImage() {
 function updateOverlayImage() {
   const file = images[currentIndex]
   const url = URL.createObjectURL(file)
+  overlayImg.onload = () => {
+    const isTallImg = isTall(overlayImg.naturalWidth, overlayImg.naturalHeight)
+    applyOverlayRotation(file, isTallImg)
+  }
   overlayImg.src = url
-  applyOverlayRotation(file)
 }
 
 folderInput.addEventListener('change', () => {
@@ -161,5 +203,13 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'r' || e.key === 'R') {
     e.preventDefault()
     rotateCurrentImage()
+  }
+  if (e.key === 'f' || e.key === 'F') {
+    e.preventDefault()
+    toggleBrowserFullscreen()
+  }
+  if (e.key === 't' || e.key === 'T') {
+    e.preventDefault()
+    toggleTallMode()
   }
 })

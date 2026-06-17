@@ -14,7 +14,10 @@ A dead-simple, fast photo gallery that runs entirely in your browser. No uploads
   - `← →` to move between images
   - `Esc` to close fullscreen
   - `R` to rotate the current image 90° (persists per-photo via localStorage)
+  - `F` to toggle browser fullscreen on the overlay
+  - `T` to toggle tall-photo auto-rotation mode
 - **Auto-sorts by last modified** so your newest shots appear first
+- **Tall-photo auto-rotation** — press `T` to auto-rotate portrait photos 90° for better viewing (display-only, doesn't affect stored rotation)
 - **Supports**: JPG, PNG, GIF, WebP, SVG, AVIF, HEIC, BMP, TIFF, and more
 
 ## Tech
